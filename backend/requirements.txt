@@ -1,0 +1,8 @@
+# CrewAI with Vertex AI for nurse scheduling
+crewai>=0.86.0
+crewai-tools>=0.17.0
+google-cloud-aiplatform>=1.38.0
+supabase>=2.0.0
+python-dotenv>=1.0.0
+litellm>=1.1.0
+
