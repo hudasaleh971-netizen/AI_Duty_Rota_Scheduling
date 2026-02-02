@@ -137,3 +137,34 @@ export const createEmptyRotaState = (): RotaState => ({
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
 });
+
+// ============================================================
+// SCHEDULE RESULT TYPES - From Backend API
+// ============================================================
+
+// Single shift assignment from AI optimization
+export type ScheduleAssignment = {
+    date: string;
+    employeeId: string | null;
+    employeeName: string | null;
+    shiftCode: string;
+};
+
+// Summary statistics
+export type ScheduleSummary = {
+    totalShifts: number;
+    assignedShifts: number;
+    unassignedShifts: number;
+    employeeHours: { [name: string]: number };
+};
+
+// Full schedule result from API
+export type ScheduleResult = {
+    status: 'success' | 'error';
+    score?: string | null;
+    schedule?: ScheduleAssignment[];
+    summary?: ScheduleSummary;
+    error?: string;
+    details?: string;
+    raw_output?: string;
+};

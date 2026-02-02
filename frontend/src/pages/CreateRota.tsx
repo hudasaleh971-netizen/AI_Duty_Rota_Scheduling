@@ -228,13 +228,13 @@ const CreateRota = () => {
             }
 
             // Save rota with calculated target hours
-            await rotaService.saveRota({
+            const savedRota = await rotaService.saveRota({
                 ...rotaState,
                 staffTargetHours: targetHours,
             });
 
-            alert('Rota saved successfully! Ready for AI optimization.');
-            navigate('/');
+            // Navigate to schedule page to generate and view the optimized schedule
+            navigate(`/schedule/${savedRota.id}`);
         } catch (error) {
             console.error('Failed to save rota:', error);
             alert('Failed to save rota. Please try again.');
@@ -242,6 +242,7 @@ const CreateRota = () => {
             setSaving(false);
         }
     };
+
 
     return (
         <>

@@ -3,6 +3,7 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import CreateUnit from './pages/CreateUnit';
 import CreateRota from './pages/CreateRota';
+import ViewSchedule from './pages/ViewSchedule';
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
           <Route path="create-unit" element={<CreateUnit />} />
           <Route path="create-rota" element={<CreateRota />} />
           <Route path="edit-rota/:id" element={<CreateRota />} />
+          <Route path="schedule/:rotaId" element={<ViewSchedule />} />
         </Route>
       </Routes>
     </BrowserRouter>

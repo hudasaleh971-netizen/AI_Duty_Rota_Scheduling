@@ -179,7 +179,6 @@ const Dashboard = () => {
                                 key={rota.id}
                                 className="rota-list-item animate-fadeIn"
                                 style={{ animationDelay: `${index * 0.1}s` }}
-                                onClick={() => navigate(`/edit-rota/${rota.id}`)}
                             >
                                 <div className="rota-list-info">
                                     <h4>{rota.unitName}</h4>
@@ -190,12 +189,29 @@ const Dashboard = () => {
                                         <span>🕐 Modified {getTimeAgo(rota.lastModified)}</span>
                                     </div>
                                 </div>
-                                <Button variant="secondary" size="sm">
-                                    View Details →
-                                </Button>
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="primary"
+                                        size="sm"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigate(`/schedule/${rota.id}`);
+                                        }}
+                                    >
+                                        📊 View Schedule
+                                    </Button>
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => navigate(`/edit-rota/${rota.id}`)}
+                                    >
+                                        ✏️ Edit
+                                    </Button>
+                                </div>
                             </div>
                         ))}
                     </div>
+
                 ) : (
                     <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
                         <p style={{ fontSize: '3rem', marginBottom: '1rem' }}>📅</p>
