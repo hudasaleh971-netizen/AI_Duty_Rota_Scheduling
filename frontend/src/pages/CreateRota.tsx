@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { TextArea } from '../components/ui/TextArea';
+import { AICopilotSidebar } from '../components/AICopilotSidebar';
 import type { RotaState, SpecialRequest, UnitState } from '../types';
 import { createEmptyRotaState } from '../types';
 import { unitService } from '../services/unitService';
@@ -577,6 +578,18 @@ const CreateRota = () => {
                     </>
                 )}
             </div>
+
+            {/* AI Copilot Sidebar for form assistance */}
+            <AICopilotSidebar
+                agentType="rota"
+                onFileProcessed={(data) => {
+                    console.log('Rota file processed:', data);
+                    // TODO: Apply extracted data to form
+                }}
+                onSuggestionsReceived={(suggestions) => {
+                    console.log('Rota suggestions:', suggestions);
+                }}
+            />
         </>
     );
 };

@@ -1,0 +1,116 @@
+generate_input_task:
+  description: >
+    Transform the Supabase data into Timefold input_data.json format.
+    
+    INPUT DATA:
+    - Rota Config: {rota_data}
+    - Unit Config: {unit_data}
+    
+    EXTRACT FROM ABOVE:
+    - staff list from unit_data
+    - shift_codes from unit_data  
+    - special_requests from rota_data
+    - staff_target_hours and staff_owing_hours from rota_data
+    - start_date and end_date from rota_data
+    - comments from rota_data
+    
+    OUTPUT SCHEMA:
+    {{
+      "problemId": "rota-{rota_id}",
+      "config": {{
+        "unitName": "from unit_data.name",
+        "startDate": "YYYY-MM-DD",
+        "endDate": "YYYY-MM-DD",
+        "minNursesPerShift": 2
+      }},
+      "employees": [
+        {{
+          "id": "staff.id (e.g. s1)",
+          "name": "staff.name",
+          "skills": ["staff.position"],
+          "contractedHours": 160,
+          "owingHours": "from staff_owing_hours[id]",
+          "paidAbsenceHours": "calculate from AL/SL/TR in special_requests",
+          "targetWorkingHours": "from staff_target_hours[id] OR calculate",
+          "unavailableTimeSpans": [
+            "dates where this staff has AL/SL/TR/DO in special_requests"
+          ]
+        }}
+      ],
+      "shifts": [
+        {{
+          "id": "2026-02-01-M",
+          "code": "M",
+          "start": "2026-02-01T07:00:00",
+          "end": "2026-02-01T15:00:00",
+          "hours": 8,
+          "lockedEmployeeId": "staff.id if isLocked=true for working shift"
+        }}
+      ],
+      "constraintConfig": {{
+        "hard": [
+          {{"name": "one_shift_per_day"}},
+          {{"name": "honor_unavailability"}},
+          {{"name": "honor_locked_assignments"}}
+        ],
+        "soft": [
+          {{"name": "balance_hours", "weight": 100}}
+        ]
+      }}
+    }}
+    
+    CRITICAL RULES:
+    1. Use shift_codes from unit_data to get actual shift times
+    2. Generate shifts only for WORKING types (M/E/N) - not for AL/SL/TR/DO
+    3. For locked working shifts (M/E/N with isLocked=true), set lockedEmployeeId
+    4. For non-working codes (AL/SL/TR/DO), add to unavailableTimeSpans only
+    5. Read the comments field for any special instructions
+    
+    OUTPUT ONLY VALID JSON - no markdown code blocks
+  expected_output: >
+    Valid JSON matching the Timefold input schema.
+  agent: data_interpreter
+
+run_and_validate_task:
+  description: >
+    Run the Timefold solver on the input_data.json, then validate and format the output.
+    
+    STEP 1: RUN SOLVER
+    Use the TimefoldSolverTool with file_path = "{input_file_path}"
+    
+    STEP 2: VALIDATE LOCKED REQUESTS
+    Compare solver output against special_requests from input:
+    - Special Requests: {special_requests}
+    For each request with isLocked=true:
+    - If shiftCode is M/E/N: verify that employee is assigned that shift on that date
+    - If shiftCode is AL/SL/TR/DO: verify employee is NOT assigned a working shift
+    
+    STEP 3: ADD NON-CLINICAL CODES
+    The solver only assigns M/E/N shifts. For each special_request with AL/SL/TR/DO:
+    - Add to schedule: {{date, employeeId, employeeName, shiftCode}}
+    - Use staffId to look up employeeName from the staff list in {unit_data}
+    
+    STEP 4: FILL REMAINING DAYS WITH OFF CODE
+    For each employee, for each date in the period:
+    - If no shift assigned and no special_request, assign "O" (day off)
+    
+    STEP 5: FORMAT FINAL OUTPUT
+    {{
+      "status": "success",
+      "score": "from solver result",
+      "schedule": [
+        {{"date": "YYYY-MM-DD", "employeeId": "s1", "employeeName": "Name", "shiftCode": "M|E|N|O|AL|SL|TR|DO"}}
+      ],
+      "summary": {{
+        "totalShifts": "total entries in schedule",
+        "assignedShifts": "working shifts (M/E/N)",
+        "unassignedShifts": 0,
+        "employeeHours": {{"Name": hours}},
+        "validationIssues": ["list any problems found"]
+      }}
+    }}
+    
+    OUTPUT ONLY VALID JSON - no markdown code blocks
+  expected_output: >
+    A valid JSON object with the finalized schedule ready for the frontend.
+  agent: validator

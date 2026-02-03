@@ -9,7 +9,9 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import uvicorn
 
-from src.crew import run_scheduling_crew
+# TEMPORARILY DISABLED - Requires Java 17+ for Timefold
+# from src.crew import run_scheduling_crew
+from src.copilot_endpoint import copilot_app
 
 app = FastAPI(
     title="Nurse Scheduling API",
@@ -20,11 +22,14 @@ app = FastAPI(
 # CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:4000", "http://localhost:5173"],
+    allow_origins=["http://localhost:3000", "http://localhost:4000", "http://localhost:5173", "http://localhost:5175"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount CopilotKit agent endpoint
+app.mount("/copilotkit", copilot_app)
 
 
 # ============================================================================
@@ -69,15 +74,16 @@ async def root():
         "name": "Nurse Scheduling API",
         "status": "running",
         "endpoints": {
-            "POST /api/schedule": "Generate optimized schedule for a rota",
-            "GET /api/health": "Health check"
+            "POST /api/schedule": "Generate optimized schedule for a rota (TEMPORARILY DISABLED)",
+            "GET /api/health": "Health check",
+            "POST /copilotkit/process-file": "Process files with AI agents"
         }
     }
 
 
 @app.get("/api/health")
 async def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "copilotkit": "enabled", "scheduling": "disabled (requires Java 17+)"}
 
 
 @app.post("/api/schedule/{rota_id}", response_model=ScheduleResponse)
@@ -85,34 +91,34 @@ async def generate_schedule(rota_id: str):
     """
     Generate an optimized schedule for the given rota.
     
-    This runs the 3-agent CrewAI pipeline:
-    1. Data Interpreter: Fetches data from Supabase, generates Timefold JSON
-    2. Code Generator: Creates Timefold Python code
-    3. Executor: Runs solver, returns optimized schedule
-    
-    Args:
-        rota_id: The rota configuration ID from the frontend
-        
-    Returns:
-        ScheduleResponse with optimized schedule or error
+    TEMPORARILY DISABLED - Requires Java 17+ for Timefold solver.
     """
-    try:
-        result = run_scheduling_crew(rota_id)
-        return ScheduleResponse(**result)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # TEMPORARILY DISABLED - Uncomment when Java 17+ is installed
+    # try:
+    #     result = run_scheduling_crew(rota_id)
+    #     return ScheduleResponse(**result)
+    # except Exception as e:
+    #     raise HTTPException(status_code=500, detail=str(e))
+    
+    return ScheduleResponse(
+        status="disabled",
+        error="Scheduling temporarily disabled - requires Java 17+ for Timefold solver",
+        details="Install Java 17+ and uncomment the crew import to enable scheduling"
+    )
 
 
 @app.post("/api/schedule", response_model=ScheduleResponse)
 async def generate_schedule_body(request: ScheduleRequest):
     """
     Alternative endpoint accepting rota_id in request body.
+    
+    TEMPORARILY DISABLED - Requires Java 17+ for Timefold solver.
     """
-    try:
-        result = run_scheduling_crew(request.rota_id)
-        return ScheduleResponse(**result)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return ScheduleResponse(
+        status="disabled",
+        error="Scheduling temporarily disabled - requires Java 17+ for Timefold solver",
+        details="Install Java 17+ and uncomment the crew import to enable scheduling"
+    )
 
 
 # ============================================================================
