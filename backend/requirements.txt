@@ -19,19 +19,7 @@ timefold>=1.0.0
 langfuse>=2.0.0
 openinference-instrumentation-crewai>=0.1.0
 
-# Google ADK and Gemini
-google-genai>=0.7.0
-google-adk>=0.3.0
-
-# File processing
+# File processing (optional - for future file upload features)
 openpyxl>=3.1.0
 python-docx>=1.1.0
 python-multipart>=0.0.9
-
-# CopilotKit SDK for AG-UI protocol
-copilotkit>=0.1.0
-langgraph>=0.2.0
-langchain-core>=0.3.0
-langchain-google-genai>=2.0.0
-ag-ui-langgraph>=0.1.0
-

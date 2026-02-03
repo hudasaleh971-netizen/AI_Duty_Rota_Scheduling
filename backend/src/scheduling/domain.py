@@ -3,14 +3,18 @@ Static Domain Model for Nurse Scheduling
 
 This file contains the Timefold domain classes that don't change per rota.
 Only the input_data.json changes.
+
+Updated for Timefold 1.24.0 Python API which uses:
+- @planning_entity and @planning_solution decorators
+- Annotated[Type, PlanningVariable] for planning variables
+- Annotated[Type, PlanningId] for entity IDs
 """
 from dataclasses import dataclass, field
 from datetime import datetime, date, timedelta
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Annotated
 
 from timefold.solver.domain import (
     planning_entity, 
-    planning_variable, 
     planning_solution,
     PlanningId,
     PlanningVariable,
@@ -85,16 +89,17 @@ class Employee:
 class Shift:
     """
     Planning entity - the solver assigns an employee to each shift.
+    Uses Annotated types for Timefold 1.24.0 API.
     """
-    id: str
+    id: Annotated[str, PlanningId]
     code: str
     start: datetime
     end: datetime
     hours: int
     locked_employee_id: Optional[str] = None  # Pre-assigned (hard constraint)
     
-    # This is what the solver optimizes
-    employee: Optional[Employee] = field(default=None)
+    # Planning variable - this is what the solver optimizes
+    employee: Annotated[Optional[Employee], PlanningVariable] = field(default=None)
 
     def __post_init__(self):
         if isinstance(self.start, str):
@@ -130,16 +135,20 @@ class Shift:
 class ShiftSchedule:
     """
     Planning solution - contains all employees and shifts.
+    Uses Annotated types for Timefold 1.24.0 API.
     """
-    employees: List[Employee] = field(default_factory=list)
-    shifts: List[Shift] = field(default_factory=list)
+    # Problem facts with value range for employee assignment
+    employees: Annotated[List[Employee], ProblemFactCollectionProperty, ValueRangeProvider] = field(default_factory=list)
+    
+    # Planning entities (shifts to be assigned)
+    shifts: Annotated[List[Shift], PlanningEntityCollectionProperty] = field(default_factory=list)
     
     # Configuration
     config: dict = field(default_factory=dict)
     constraint_config: dict = field(default_factory=dict)
     
     # Score
-    score: HardSoftScore = field(default=None)
+    score: Annotated[HardSoftScore, PlanningScore] = field(default=None)
 
     def get_min_nurses_per_shift(self) -> int:
         return self.config.get("minNursesPerShift", 1)

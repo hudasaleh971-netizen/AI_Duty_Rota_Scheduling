@@ -9,9 +9,8 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import uvicorn
 
-# TEMPORARILY DISABLED - Requires Java 17+ for Timefold
-# from src.crew import run_scheduling_crew
-from src.copilot_endpoint import copilot_app
+# CrewAI scheduling with Timefold (requires Java 17+)
+from src.crew import run_scheduling_crew
 
 app = FastAPI(
     title="Nurse Scheduling API",
@@ -27,9 +26,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Mount CopilotKit agent endpoint
-app.mount("/copilotkit", copilot_app)
 
 
 # ============================================================================
@@ -74,16 +70,16 @@ async def root():
         "name": "Nurse Scheduling API",
         "status": "running",
         "endpoints": {
-            "POST /api/schedule": "Generate optimized schedule for a rota (TEMPORARILY DISABLED)",
-            "GET /api/health": "Health check",
-            "POST /copilotkit/process-file": "Process files with AI agents"
+            "POST /api/schedule/{rota_id}": "Generate optimized schedule for a rota",
+            "POST /api/schedule": "Generate schedule (rota_id in body)",
+            "GET /api/health": "Health check"
         }
     }
 
 
 @app.get("/api/health")
 async def health():
-    return {"status": "healthy", "copilotkit": "enabled", "scheduling": "disabled (requires Java 17+)"}
+    return {"status": "healthy", "scheduling": "enabled", "solver": "timefold"}
 
 
 @app.post("/api/schedule/{rota_id}", response_model=ScheduleResponse)
@@ -91,34 +87,25 @@ async def generate_schedule(rota_id: str):
     """
     Generate an optimized schedule for the given rota.
     
-    TEMPORARILY DISABLED - Requires Java 17+ for Timefold solver.
+    Uses CrewAI agents with Timefold solver for constraint optimization.
     """
-    # TEMPORARILY DISABLED - Uncomment when Java 17+ is installed
-    # try:
-    #     result = run_scheduling_crew(rota_id)
-    #     return ScheduleResponse(**result)
-    # except Exception as e:
-    #     raise HTTPException(status_code=500, detail=str(e))
-    
-    return ScheduleResponse(
-        status="disabled",
-        error="Scheduling temporarily disabled - requires Java 17+ for Timefold solver",
-        details="Install Java 17+ and uncomment the crew import to enable scheduling"
-    )
+    try:
+        result = run_scheduling_crew(rota_id)
+        return ScheduleResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/schedule", response_model=ScheduleResponse)
 async def generate_schedule_body(request: ScheduleRequest):
     """
     Alternative endpoint accepting rota_id in request body.
-    
-    TEMPORARILY DISABLED - Requires Java 17+ for Timefold solver.
     """
-    return ScheduleResponse(
-        status="disabled",
-        error="Scheduling temporarily disabled - requires Java 17+ for Timefold solver",
-        details="Install Java 17+ and uncomment the crew import to enable scheduling"
-    )
+    try:
+        result = run_scheduling_crew(request.rota_id)
+        return ScheduleResponse(**result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================
