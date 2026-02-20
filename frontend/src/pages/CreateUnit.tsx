@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { TextArea } from '../components/ui/TextArea';
-
 import type { UnitState, Staff, ShiftCode } from '../types';
 import { createEmptyUnitState, createEmptyStaff, createEmptyShiftCode } from '../types';
 import { unitService, defaultShiftCodes } from '../services/unitService';
@@ -36,7 +35,7 @@ const CreateUnit = () => {
         }));
     };
 
-    const updateStaff = (index: number, field: keyof Staff, value: string | number) => {
+    const updateStaff = (index: number, field: keyof Staff, value: string | number | boolean) => {
         setUnitState((prev) => ({
             ...prev,
             staff: prev.staff.map((s, i) =>
@@ -63,7 +62,7 @@ const CreateUnit = () => {
         }));
     };
 
-    const updateShiftCode = (index: number, field: keyof ShiftCode, value: string | number) => {
+    const updateShiftCode = (index: number, field: keyof ShiftCode, value: string | number | boolean) => {
         setUnitState((prev) => ({
             ...prev,
             shiftCodes: prev.shiftCodes.map((sc, i) =>
@@ -99,9 +98,25 @@ const CreateUnit = () => {
 
         try {
             setSaving(true);
-            await unitService.saveUnit(unitState);
+
+            // Check for duplicate name
+            const existingUnits = await unitService.getUnits();
+            const normalize = (s: string) => s.trim().toLowerCase();
+            const isDuplicate = existingUnits.some(
+                u => normalize(u.unitInfo.name) === normalize(unitState.unitInfo.name)
+            );
+
+            if (isDuplicate) {
+                alert('A unit with this name already exists. Please choose a different name.');
+                setSaving(false);
+                return;
+            }
+
+            const savedUnit = await unitService.saveUnit(unitState);
             alert('Unit configuration saved successfully!');
-            navigate('/');
+
+            // Redirect to Create Rota with the new unit selected
+            navigate('/create-rota', { state: { selectedUnitId: savedUnit.id } });
         } catch (error) {
             console.error('Failed to save unit:', error);
             alert('Failed to save unit. Please try again.');
@@ -145,12 +160,6 @@ const CreateUnit = () => {
                                 value={unitState.unitInfo.name}
                                 onChange={(e) => updateUnitInfo('name', e.target.value)}
                             />
-                            <Input
-                                label="Department/Specialty"
-                                placeholder="e.g., Critical Care"
-                                value={unitState.unitInfo.department}
-                                onChange={(e) => updateUnitInfo('department', e.target.value)}
-                            />
                         </div>
                         <div className="form-row">
                             <Input
@@ -158,13 +167,6 @@ const CreateUnit = () => {
                                 placeholder="e.g., Dr. Sarah Ahmed"
                                 value={unitState.unitInfo.manager}
                                 onChange={(e) => updateUnitInfo('manager', e.target.value)}
-                            />
-                            <Input
-                                label="Min Direct Nurses per Shift"
-                                type="number"
-                                min={1}
-                                value={unitState.unitInfo.minNursesPerShift}
-                                onChange={(e) => updateUnitInfo('minNursesPerShift', parseInt(e.target.value) || 1)}
                             />
                         </div>
                         <TextArea
@@ -202,7 +204,7 @@ const CreateUnit = () => {
                                             <th>Staff Name</th>
                                             <th>Staff ID</th>
                                             <th>Position/Grade</th>
-                                            <th>Staff Type</th>
+                                            <th style={{ width: '100px', textAlign: 'center' }}>Direct Care</th>
                                             <th>Hours/Month</th>
                                             <th>Comments</th>
                                             <th style={{ width: '80px' }}>Actions</th>
@@ -230,25 +232,21 @@ const CreateUnit = () => {
                                                     />
                                                 </td>
                                                 <td>
-                                                    <select
-                                                        className="table-select"
+                                                    <input
+                                                        type="text"
+                                                        className="table-input"
+                                                        placeholder="e.g., Senior Nurse"
                                                         value={staff.position}
                                                         onChange={(e) => updateStaff(index, 'position', e.target.value)}
-                                                    >
-                                                        <option value="Level 1">Level 1</option>
-                                                        <option value="Level 2">Level 2</option>
-                                                        <option value="Level 3">Level 3</option>
-                                                    </select>
+                                                    />
                                                 </td>
-                                                <td>
-                                                    <select
-                                                        className="table-select"
-                                                        value={staff.type}
-                                                        onChange={(e) => updateStaff(index, 'type', e.target.value)}
-                                                    >
-                                                        <option value="Direct Care">Direct Care</option>
-                                                        <option value="Non-Direct Care">Non-Direct Care</option>
-                                                    </select>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        className="h-5 w-5"
+                                                        checked={staff.isDirectCare}
+                                                        onChange={(e) => updateStaff(index, 'isDirectCare', e.target.checked)}
+                                                    />
                                                 </td>
                                                 <td>
                                                     <input
@@ -324,7 +322,7 @@ const CreateUnit = () => {
                                             <th>Definition</th>
                                             <th>Description</th>
                                             <th style={{ width: '80px' }}>Hours</th>
-                                            <th>Type</th>
+                                            <th style={{ width: '100px', textAlign: 'center' }}>Direct Care</th>
                                             <th>Remarks</th>
                                             <th style={{ width: '80px' }}>Actions</th>
                                         </tr>
@@ -370,16 +368,13 @@ const CreateUnit = () => {
                                                         onChange={(e) => updateShiftCode(index, 'hours', parseInt(e.target.value) || 0)}
                                                     />
                                                 </td>
-                                                <td>
-                                                    <select
-                                                        className="table-select"
-                                                        value={shiftCode.type}
-                                                        onChange={(e) => updateShiftCode(index, 'type', e.target.value)}
-                                                    >
-                                                        <option value="Direct Care">Direct Care</option>
-                                                        <option value="Non-Direct Care">Non-Direct Care</option>
-                                                        <option value="-">-</option>
-                                                    </select>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        className="h-5 w-5"
+                                                        checked={shiftCode.isDirectCare}
+                                                        onChange={(e) => updateShiftCode(index, 'isDirectCare', e.target.checked)}
+                                                    />
                                                 </td>
                                                 <td>
                                                     <input
@@ -420,9 +415,6 @@ const CreateUnit = () => {
                     </Button>
                 </div>
             </div>
-
-
-
         </>
     );
 };

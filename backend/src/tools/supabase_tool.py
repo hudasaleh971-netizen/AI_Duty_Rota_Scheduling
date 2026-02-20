@@ -77,11 +77,8 @@ Special Requests (pre-filled shifts):
 
 Comments: {rota_data.get('comments', 'None')}
 
-=== UNIT DETAILS ===
 Name: {unit_data['name']}
-Department: {unit_data.get('department', 'N/A')}
 Manager: {unit_data.get('manager', 'N/A')}
-Min Nurses Per Shift: {unit_data.get('min_nurses_per_shift', 2)}
 
 Rules:
 {unit_data.get('rules', 'No specific rules')}
@@ -93,3 +90,58 @@ Rules:
 {unit_data['shift_codes']}
 """
         return result
+
+class SaveScheduleInput(BaseModel):
+    """Input for saving schedule data."""
+    rota_id: str = Field(description="The UUID of the rota configuration")
+    schedule_data: dict = Field(description="The generated schedule object containing 'schedule' list")
+
+
+
+
+class SaveScheduleTool(BaseTool):
+    name: str = "save_schedule_to_db"
+    description: str = """
+    Saves the final generated schedule to the Supabase database.
+    Deletes existing assignments for the rota and inserts new ones.
+    """
+    args_schema: Type[BaseModel] = SaveScheduleInput
+    
+    def _run(self, rota_id: str, schedule_data: dict) -> str:
+        """Save schedule to database."""
+        try:
+            client = get_client()
+            assignments = []
+            
+            # Extract the actual list
+            items = schedule_data.get("schedule", [])
+            
+            if not items:
+                return "Warning: No items to save in schedule."
+            
+            print(f"💾 Using SaveScheduleTool: Saving {len(items)} assignments for {rota_id}...")
+            
+            for item in items:
+                assignments.append({
+                    "rota_id": rota_id,
+                    "date": item["date"],
+                    "employee_id": item["employeeId"],
+                    "shift_code": item["shiftCode"],
+                    "employee_name": item["employeeName"]
+                })
+                
+            # Delete existing
+            client.table("schedule_assignments").delete().eq("rota_id", rota_id).execute()
+            
+            # Bulk insert
+            client.table("schedule_assignments").insert(assignments).execute()
+            
+            return f"Success: Saved {len(assignments)} assignments to database."
+            
+        except Exception as e:
+            return f"Error saving to database: {str(e)}"
+
+# Helper function to allow direct usage without instantiating tool
+def save_schedule_direct(rota_id: str, schedule_data: dict):
+    tool = SaveScheduleTool()
+    return tool._run(rota_id, schedule_data)

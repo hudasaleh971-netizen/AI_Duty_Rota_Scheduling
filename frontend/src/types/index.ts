@@ -1,5 +1,5 @@
 // ============================================================
-// TYPE DEFINITIONS - Schedule State Schemas
+// TYPE DEFINITIONS - CopilotKit-Ready State Schemas
 // ============================================================
 
 // Staff member in a unit
@@ -7,8 +7,8 @@ export type Staff = {
     id: string;
     name: string;
     staffId: string;
-    position: 'Level 1' | 'Level 2' | 'Level 3';
-    type: 'Direct Care' | 'Non-Direct Care';
+    position: string;     // Free text field
+    isDirectCare: boolean; // True = Direct Care, False = Non-Direct
     contractedHours: number;
     comments: string;
 };
@@ -24,16 +24,14 @@ export type ShiftCode = {
     definition: string;
     description: string;
     hours: number;
-    type: 'Direct Care' | 'Non-Direct Care' | '-';
+    isDirectCare: boolean; // True = Direct Care, False = Non-Direct (e.g. Admin, Training)
     remarks: string;
 };
 
 // Unit information
 export type UnitInfo = {
     name: string;
-    department: string;
     manager: string;
-    minNursesPerShift: number;
     rules: string;
 };
 
@@ -55,6 +53,27 @@ export type SpecialRequest = {
     isLocked: boolean;
 };
 
+// Scheduling rule for the suggested rules section
+export type SchedulingRule = {
+    key: string;    // snake_case identifier, e.g. "min_rest_between_duties"
+    name: string;   // display name for UI
+    description: string;
+    parameterLabel: string;
+    parameterSuffix: string;
+    defaultValue: string;
+    currentValue: string;
+    isActive: boolean;
+    isLocked: boolean;
+};
+
+// Minimized rule format for Supabase persistence (only active rules are stored)
+// Uses descriptive snake_case names so the agent can read them directly
+export type SavedRule = {
+    rule: string;   // e.g. "min_rest_between_duties"
+    value: string;
+    locked: boolean;
+};
+
 // Rota metadata
 export type RotaMetadata = {
     unitId: string;
@@ -70,6 +89,8 @@ export type RotaState = {
     staffOwingHours: StaffOwingHours;  // INPUT: Balance from previous month
     staffTargetHours: StaffOwingHours; // OUTPUT: Calculated goal for this month
     specialRequests: SpecialRequest[];
+    rules: SchedulingRule[];           // Full rules (in-memory, for UI)
+    savedRules: SavedRule[];           // Minimized rules from DB (active only)
     comments: string;
     createdAt: string;
     updatedAt: string;
@@ -89,8 +110,8 @@ export const createEmptyStaff = (): Staff => ({
     id: crypto.randomUUID(),
     name: '',
     staffId: '',
-    position: 'Level 1',
-    type: 'Direct Care',
+    position: 'Standard Nurse',
+    isDirectCare: true,
     contractedHours: 160,
     comments: '',
 });
@@ -101,7 +122,7 @@ export const createEmptyShiftCode = (): ShiftCode => ({
     definition: '',
     description: '',
     hours: 8,
-    type: 'Direct Care',
+    isDirectCare: true,
     remarks: '',
 });
 
@@ -110,9 +131,7 @@ export const createEmptyUnitState = (): UnitState => ({
     id: crypto.randomUUID(),
     unitInfo: {
         name: '',
-        department: '',
         manager: '',
-        minNursesPerShift: 2,
         rules: '',
     },
     staff: [],
@@ -133,6 +152,8 @@ export const createEmptyRotaState = (): RotaState => ({
     staffOwingHours: {},
     staffTargetHours: {},
     specialRequests: [],
+    rules: [],
+    savedRules: [],
     comments: '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -150,12 +171,19 @@ export type ScheduleAssignment = {
     shiftCode: string;
 };
 
+// Detailed hours structure
+export type EmployeeHoursDetail = {
+    total: number;
+    target?: number;
+    balance?: number;
+};
+
 // Summary statistics
 export type ScheduleSummary = {
     totalShifts: number;
     assignedShifts: number;
     unassignedShifts: number;
-    employeeHours: { [name: string]: number };
+    employeeHours: { [name: string]: number | EmployeeHoursDetail };
 };
 
 // Full schedule result from API

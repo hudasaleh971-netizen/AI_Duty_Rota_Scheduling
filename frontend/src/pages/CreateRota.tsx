@@ -1,19 +1,47 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { TextArea } from '../components/ui/TextArea';
-
-import type { RotaState, SpecialRequest, UnitState } from '../types';
+import type { RotaState, SchedulingRule, SpecialRequest, UnitState } from '../types';
 import { createEmptyRotaState } from '../types';
 import { unitService } from '../services/unitService';
 import { rotaService } from '../services/rotaService';
 
+// Default scheduling rules
+const DEFAULT_RULES: SchedulingRule[] = [
+    { key: 'min_rest_between_duties', name: 'Minimum Rest Between Duties', description: 'Minimum rest hours between any two shifts', parameterLabel: 'Rest ≥', parameterSuffix: 'hours', defaultValue: '12', currentValue: '12', isActive: true, isLocked: true },
+    { key: 'min_weekends_off', name: 'Minimum Weekends Off', description: 'Full weekends (Sat+Sun) off per month', parameterLabel: 'Weekends ≥', parameterSuffix: '', defaultValue: '1', currentValue: '1', isActive: true, isLocked: true },
+    { key: 'max_consecutive_working_days', name: 'Max Consecutive Working Days', description: 'Limit continuous work days', parameterLabel: 'Days ≤', parameterSuffix: '', defaultValue: '5', currentValue: '5', isActive: false, isLocked: false },
+    { key: 'max_consecutive_night_shifts', name: 'Max Consecutive Night Shifts', description: 'Limit night shift streaks', parameterLabel: 'Nights ≤', parameterSuffix: '', defaultValue: '3', currentValue: '3', isActive: false, isLocked: false },
+    { key: 'fair_night_distribution', name: 'Fair Night Distribution', description: 'Balance night shifts across staff', parameterLabel: 'Imbalance ≤', parameterSuffix: '', defaultValue: '1', currentValue: '1', isActive: false, isLocked: false },
+    { key: 'day_night_balance', name: 'Day vs Night Balance', description: 'Avoid extreme day/night imbalance', parameterLabel: 'Difference ≤', parameterSuffix: '', defaultValue: '2', currentValue: '2', isActive: false, isLocked: false },
+    { key: 'min_staffing_per_shift', name: 'Minimum Staffing Per Shift', description: 'Ensure minimum nurses per shift', parameterLabel: 'Min staff =', parameterSuffix: '', defaultValue: '1', currentValue: '1', isActive: false, isLocked: false },
+    { key: 'avoid_day_night_transition', name: 'Avoid Day→Night Transition', description: 'Avoid day followed by night shift', parameterLabel: 'Avoid =', parameterSuffix: '', defaultValue: 'ON', currentValue: 'ON', isActive: false, isLocked: false },
+];
+
+// Rehydrate full rules from minimized DB format (savedRules) + defaults
+// savedRules only contains active rules as {rule, value, locked}
+const rehydrateRules = (savedRules: { rule: string; value: string; locked: boolean }[]): SchedulingRule[] => {
+    const savedMap = new Map(savedRules.map(r => [r.rule, r]));
+    return DEFAULT_RULES.map(rule => {
+        const saved = savedMap.get(rule.key);
+        if (saved) {
+            return { ...rule, currentValue: saved.value, isLocked: saved.locked, isActive: true };
+        }
+        return { ...rule, isActive: false, isLocked: false };
+    });
+};
+
 const CreateRota = () => {
     const navigate = useNavigate();
+    const location = useLocation();
 
     // Single Source of Truth - Rota State
-    const [rotaState, setRotaState] = useState<RotaState>(createEmptyRotaState());
+    const [rotaState, setRotaState] = useState<RotaState>(() => ({
+        ...createEmptyRotaState(),
+        rules: DEFAULT_RULES,
+    }));
 
     // Units loaded from Supabase
     const [units, setUnits] = useState<UnitState[]>([]);
@@ -30,6 +58,24 @@ const CreateRota = () => {
                 setLoadingUnits(true);
                 const data = await unitService.getUnits();
                 setUnits(data);
+
+                // Auto-select unit if passed in state (e.g. from CreateUnit)
+                const preSelectedId = (location.state as any)?.selectedUnitId;
+                if (preSelectedId) {
+                    const unit = data.find(u => u.id === preSelectedId);
+                    if (unit) {
+                        setRotaState(prev => ({
+                            ...prev,
+                            metadata: {
+                                ...prev.metadata,
+                                unitId: unit.id,
+                                unitName: unit.unitInfo.name
+                            }
+                        }));
+                        // Clear the state so it doesn't re-trigger on refresh weirdly (optional)
+                        window.history.replaceState({}, document.title);
+                    }
+                }
             } catch (error) {
                 console.error('Failed to load units:', error);
             } finally {
@@ -38,7 +84,7 @@ const CreateRota = () => {
         };
 
         loadUnits();
-    }, []);
+    }, [location.state]);
 
     // Get selected unit data
     const selectedUnit = useMemo(() => {
@@ -204,6 +250,40 @@ const CreateRota = () => {
         return date.toISOString().split('T')[0];
     };
 
+    // --- Rule handlers ---
+    const toggleRuleActive = (ruleKey: string) => {
+        setRotaState((prev) => ({
+            ...prev,
+            rules: prev.rules.map((r) =>
+                r.key === ruleKey ? { ...r, isActive: !r.isActive } : r
+            ),
+            updatedAt: new Date().toISOString(),
+        }));
+    };
+
+    const toggleRuleLock = (ruleKey: string) => {
+        setRotaState((prev) => ({
+            ...prev,
+            rules: prev.rules.map((r) =>
+                r.key === ruleKey ? { ...r, isLocked: !r.isLocked } : r
+            ),
+            updatedAt: new Date().toISOString(),
+        }));
+    };
+
+    const updateRuleValue = (ruleKey: string, value: string) => {
+        // Validate: allow empty string (while typing) or positive integers only
+        if (value === '' || /^\d+$/.test(value)) {
+            setRotaState((prev) => ({
+                ...prev,
+                rules: prev.rules.map((r) =>
+                    r.key === ruleKey ? { ...r, currentValue: value } : r
+                ),
+                updatedAt: new Date().toISOString(),
+            }));
+        }
+    };
+
     // Validation for step 1
     const canProceedToStep2 = () => {
         return (
@@ -297,23 +377,22 @@ const CreateRota = () => {
                                 <Select
                                     label="Select Unit"
                                     placeholder={loadingUnits ? 'Loading units...' : 'Choose a unit...'}
-                                    options={units.map((unit) => ({
-                                        value: unit.id,
-                                        label: `${unit.unitInfo.name} (${unit.staff.length} staff)`,
-                                    }))}
+                                    options={[
+                                        ...units.map((unit) => ({
+                                            value: unit.id,
+                                            label: `${unit.unitInfo.name} (${unit.staff.length} staff)`,
+                                        })),
+                                        { value: 'create_new_unit', label: '+ Create New Unit' }
+                                    ]}
                                     value={rotaState.metadata.unitId}
-                                    onChange={(e) => updateMetadata('unitId', e.target.value)}
+                                    onChange={(e) => {
+                                        if (e.target.value === 'create_new_unit') {
+                                            navigate('/create-unit');
+                                        } else {
+                                            updateMetadata('unitId', e.target.value);
+                                        }
+                                    }}
                                 />
-                                <div className="form-group">
-                                    <span className="form-label">Or create a new unit</span>
-                                    <Button
-                                        variant="secondary"
-                                        className="w-full mt-2"
-                                        onClick={() => navigate('/create-unit')}
-                                    >
-                                        + Create New Unit
-                                    </Button>
-                                </div>
                             </div>
 
                             <div className="section-divider" />
@@ -552,8 +631,71 @@ const CreateRota = () => {
                             </div>
                         </div>
 
-                        {/* Comments */}
+                        {/* Suggested Rules */}
                         <div className="card animate-fadeIn stagger-2 mb-6">
+                            <div className="card-header">
+                                <h3 className="card-title">⚙️ Suggested Rules</h3>
+                                <span className="text-small text-muted">
+                                    {rotaState.rules.filter(r => r.isActive).length} of {rotaState.rules.length} active
+                                </span>
+                            </div>
+                            <div className="card-body" style={{ padding: 0 }}>
+                                <div className="rules-list">
+                                    {rotaState.rules.map((rule) => (
+                                        <div
+                                            key={rule.key}
+                                            className={`rule-row ${!rule.isActive ? 'inactive' : ''}`}
+                                        >
+                                            {/* Checkbox */}
+                                            <label className="rule-checkbox-wrapper">
+                                                <input
+                                                    type="checkbox"
+                                                    className="rule-checkbox"
+                                                    checked={rule.isActive}
+                                                    onChange={() => toggleRuleActive(rule.key)}
+                                                />
+                                                <span className="rule-checkbox-custom" />
+                                            </label>
+
+                                            {/* Rule info + inline param */}
+                                            <div className="rule-content">
+                                                <span className="rule-name">{rule.name}</span>
+                                                <span className="rule-param">
+                                                    {rule.parameterLabel}{' '}
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="1"
+                                                        className="rule-param-input"
+                                                        value={rule.currentValue}
+                                                        onChange={(e) => updateRuleValue(rule.key, e.target.value)}
+                                                        disabled={!rule.isActive}
+                                                        style={{ width: '60px' }} // Slightly wider for number arrows
+                                                    />
+                                                    {rule.parameterSuffix && (
+                                                        <span className="rule-param-suffix">{rule.parameterSuffix}</span>
+                                                    )}
+                                                </span>
+                                            </div>
+
+                                            {/* Lock toggle */}
+                                            <button
+                                                type="button"
+                                                className="rule-lock-btn"
+                                                onClick={() => toggleRuleLock(rule.id)}
+                                                disabled={!rule.isActive}
+                                                title={rule.isLocked ? 'Must constraint — click to relax' : 'Optional — click to make it a must'}
+                                            >
+                                                {rule.isLocked ? '🔒' : '🔓'}
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Comments */}
+                        <div className="card animate-fadeIn stagger-3 mb-6">
                             <div className="card-header">
                                 <h3 className="card-title">💬 Comments & Notes</h3>
                             </div>
@@ -578,9 +720,6 @@ const CreateRota = () => {
                     </>
                 )}
             </div>
-
-
-
         </>
     );
 };

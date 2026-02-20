@@ -5,9 +5,7 @@ import type { UnitState, Staff, ShiftCode } from '../types';
 type UnitRow = {
     id: string;
     name: string;
-    department: string | null;
     manager: string | null;
-    min_nurses_per_shift: number;
     rules: string | null;
     staff: Staff[];
     shift_codes: ShiftCode[];
@@ -20,13 +18,21 @@ const rowToUnitState = (row: UnitRow): UnitState => ({
     id: row.id,
     unitInfo: {
         name: row.name,
-        department: row.department || '',
         manager: row.manager || '',
-        minNursesPerShift: row.min_nurses_per_shift,
         rules: row.rules || '',
     },
-    staff: row.staff || [],
-    shiftCodes: row.shift_codes || [],
+    // Map staff safely, handling potential old data structure if any
+    staff: (row.staff || []).map((s: any) => ({
+        ...s,
+        // Ensure position is string
+        position: s.position || 'Standard Nurse',
+        // Map old 'type' enum to boolean if needed, or use existing boolean
+        isDirectCare: s.isDirectCare !== undefined ? s.isDirectCare : (s.type === 'Direct Care')
+    })),
+    shiftCodes: (row.shift_codes || []).map((sc: any) => ({
+        ...sc,
+        isDirectCare: sc.isDirectCare !== undefined ? sc.isDirectCare : (sc.type === 'Direct Care')
+    })),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
 });
@@ -34,9 +40,7 @@ const rowToUnitState = (row: UnitRow): UnitState => ({
 // Transform UnitState to DB payload
 const unitStateToPayload = (state: UnitState) => ({
     name: state.unitInfo.name,
-    department: state.unitInfo.department || null,
     manager: state.unitInfo.manager || null,
-    min_nurses_per_shift: state.unitInfo.minNursesPerShift,
     rules: state.unitInfo.rules || null,
     staff: state.staff,
     shift_codes: state.shiftCodes,
@@ -99,14 +103,15 @@ export const unitService = {
 };
 
 // Default shift codes (moved from mockDB)
+// Default shift codes - Updated for standard nursing shifts
 export const defaultShiftCodes: ShiftCode[] = [
-    { code: 'M', definition: 'Morning', description: 'Day shift 7:00 AM - 3:00 PM', hours: 8, type: 'Direct Care', remarks: 'Standard day shift' },
-    { code: 'E', definition: 'Evening', description: 'Afternoon shift 3:00 PM - 11:00 PM', hours: 8, type: 'Direct Care', remarks: 'Standard evening shift' },
-    { code: 'N', definition: 'Night', description: 'Night shift 7:00 PM - 7:00 AM', hours: 12, type: 'Direct Care', remarks: 'Extended night coverage' },
-    { code: 'DO', definition: 'Day Off', description: 'Rest day', hours: 0, type: '-', remarks: 'Mandatory after 6 working days' },
-    { code: 'AL', definition: 'Annual Leave', description: 'Approved leave', hours: 0, type: '-', remarks: 'Planned time off' },
-    { code: 'SL', definition: 'Sick Leave', description: 'Medical leave', hours: 0, type: '-', remarks: 'Unplanned absence' },
-    { code: 'CL', definition: 'Compensatory Leave', description: 'Time-off in lieu', hours: 0, type: '-', remarks: 'For extra hours worked' },
-    { code: 'TR', definition: 'Training', description: 'Development day', hours: 0, type: 'Non-Direct Care', remarks: 'Courses, certifications' },
-    { code: 'AD', definition: 'Administrative', description: 'Meetings, documentation', hours: 8, type: 'Non-Direct Care', remarks: 'Non-clinical duties' },
+    { code: 'D', definition: 'Day', description: 'Day shift 07:00 - 19:00', hours: 12, isDirectCare: true, remarks: 'Standard 12h day shift' },
+    { code: 'N', definition: 'Night', description: 'Night shift 19:00 - 07:00', hours: 12, isDirectCare: true, remarks: 'Standard 12h night shift' },
+    { code: 'O', definition: 'Off', description: 'Rest day', hours: 0, isDirectCare: false, remarks: 'Scheduled day off' },
+    { code: 'AL', definition: 'Annual Leave', description: 'Approved leave', hours: 12, isDirectCare: false, remarks: 'Contributes to duty hours' },
+    { code: 'SL', definition: 'Sick Leave', description: 'Medical leave', hours: 12, isDirectCare: false, remarks: 'Contributes to duty hours' },
+    { code: 'PH', definition: 'Public Holiday', description: 'Public Holiday Off', hours: 12, isDirectCare: false, remarks: 'Contributes to duty hours' },
+    { code: 'CL', definition: 'Compensatory Leave', description: 'Time-off in lieu', hours: 12, isDirectCare: false, remarks: 'Contributes to duty hours' },
+    { code: 'TR', definition: 'Training', description: 'Training/Development', hours: 8, isDirectCare: false, remarks: 'Training day (8h)' },
+    { code: 'AD', definition: 'Admin', description: 'Administrative Duties', hours: 8, isDirectCare: false, remarks: 'Non-clinical day (8h)' },
 ];

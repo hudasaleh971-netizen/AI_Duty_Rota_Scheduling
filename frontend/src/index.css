@@ -654,6 +654,162 @@ h3 {
 }
 
 /* ============================================================
+   SUGGESTED RULES SECTION
+   ============================================================ */
+.rules-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.rule-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--color-slate-100);
+  transition: all var(--transition-normal);
+}
+
+.rule-row:last-child {
+  border-bottom: none;
+}
+
+.rule-row:hover {
+  background: var(--color-slate-50);
+}
+
+.rule-row.inactive {
+  opacity: 0.45;
+}
+
+.rule-row.inactive:hover {
+  opacity: 0.65;
+}
+
+/* Custom checkbox */
+.rule-checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.rule-checkbox {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.rule-checkbox-custom {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--color-slate-300);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.rule-checkbox:checked + .rule-checkbox-custom {
+  background: linear-gradient(135deg, var(--color-teal-500), var(--color-teal-400));
+  border-color: var(--color-teal-500);
+}
+
+.rule-checkbox:checked + .rule-checkbox-custom::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.rule-checkbox:focus-visible + .rule-checkbox-custom {
+  box-shadow: 0 0 0 3px rgb(20 184 166 / 0.2);
+}
+
+/* Rule content */
+.rule-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.rule-name {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--color-navy-800);
+  white-space: nowrap;
+}
+
+.rule-param {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--color-slate-500);
+  white-space: nowrap;
+}
+
+.rule-param-input {
+  width: 52px;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+  border: 1.5px solid var(--color-slate-200);
+  border-radius: var(--radius-sm);
+  background: white;
+  color: var(--color-navy-800);
+  transition: all var(--transition-fast);
+}
+
+.rule-param-input:focus {
+  outline: none;
+  border-color: var(--color-teal-400);
+  box-shadow: 0 0 0 2px rgb(20 184 166 / 0.15);
+}
+
+.rule-param-input:disabled {
+  background: var(--color-slate-50);
+  color: var(--color-slate-400);
+  cursor: not-allowed;
+}
+
+.rule-param-suffix {
+  color: var(--color-slate-400);
+  font-size: 0.8125rem;
+}
+
+/* Lock button */
+.rule-lock-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.rule-lock-btn:hover:not(:disabled) {
+  opacity: 1;
+  background: var(--color-slate-100);
+}
+
+.rule-lock-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ============================================================
    DASHBOARD SPECIFIC
    ============================================================ */
 .dashboard-stats {

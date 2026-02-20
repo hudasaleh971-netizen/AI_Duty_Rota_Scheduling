@@ -4,28 +4,28 @@
 -- ============================================================
 
 -- Sample Unit: ICU Ward A with 4 nurses
-INSERT INTO units (id, name, department, manager, min_nurses_per_shift, rules, staff, shift_codes)
+INSERT INTO units (id, name, manager, rules, staff, shift_codes)
 VALUES (
   '11111111-1111-1111-1111-111111111111',
   'ICU Ward A',
-  'Intensive Care',
   'Dr. Sarah Ahmed',
-  2,
   ' No back-to-back night shifts. Maximum 5 consecutive work days.',
   '[
-    {"id": "s1", "name": "Fatima Hassan", "staffId": "N001", "position": "Level 2", "type": "Direct Care", "contractedHours": 160, "comments": "Senior nurse, can train others, currently Omar Khalid Prosepter"},
-    {"id": "s2", "name": "Ahmed Ali", "staffId": "N002", "position": "Level 1", "type": "Direct Care", "contractedHours": 160, "comments": ""},
-    {"id": "s3", "name": "Huda Mohammed", "staffId": "N003", "position": "Level 3", "type": "Direct Care", "contractedHours": 120, "comments": "Part-time, prefers morning shifts"},
-    {"id": "s4", "name": "Omar Khalid", "staffId": "N004", "position": "Level 1", "type": "Direct Care", "contractedHours": 160, "comments": "New hire, still in training"}
+    {"id": "s1", "name": "Fatima Hassan", "staffId": "N001", "position": "Senior Nurse", "isDirectCare": true, "contractedHours": 160, "comments": "Senior nurse, can train others, currently Omar Khalid Prosepter"},
+    {"id": "s2", "name": "Ahmed Ali", "staffId": "N002", "position": "Staff Nurse", "isDirectCare": true, "contractedHours": 160, "comments": ""},
+    {"id": "s3", "name": "Huda Mohammed", "staffId": "N003", "position": "Charge Nurse", "isDirectCare": true, "contractedHours": 120, "comments": "Part-time, prefers morning shifts"},
+    {"id": "s4", "name": "Omar Khalid", "staffId": "N004", "position": "Junior Nurse", "isDirectCare": true, "contractedHours": 160, "comments": "New hire, still in training"}
   ]'::jsonb,
   '[
-    {"code": "M", "definition": "Morning Shift", "description": "07:00-15:00", "hours": 8, "type": "Direct Care", "remarks": ""},
-    {"code": "E", "definition": "Evening Shift", "description": "15:00-23:00", "hours": 8, "type": "Direct Care", "remarks": ""},
-    {"code": "N", "definition": "Night Shift", "description": "23:00-07:00", "hours": 8, "type": "Direct Care", "remarks": "Night differential pay"},
-    {"code": "DO", "definition": "Day Off", "description": "Scheduled day off", "hours": 0, "type": "-", "remarks": ""},
-    {"code": "AL", "definition": "Annual Leave", "description": "Approved vacation", "hours": 8, "type": "-", "remarks": "Locked"},
-    {"code": "SL", "definition": "Sick Leave", "description": "Medical absence", "hours": 8, "type": "-", "remarks": ""},
-    {"code": "TR", "definition": "Training", "description": "Professional development", "hours": 8, "type": "Non-Direct Care", "remarks": ""}
+    {"code": "D", "definition": "Day", "description": "Day shift 07:00 - 19:00", "hours": 12, "isDirectCare": true, "remarks": "Standard 12h day shift"},
+    {"code": "N", "definition": "Night", "description": "Night shift 19:00 - 07:00", "hours": 12, "isDirectCare": true, "remarks": "Standard 12h night shift"},
+    {"code": "O", "definition": "Off", "description": "Rest day", "hours": 0, "isDirectCare": false, "remarks": "Scheduled day off"},
+    {"code": "AL", "definition": "Annual Leave", "description": "Approved leave", "hours": 12, "isDirectCare": false, "remarks": "Contributes to duty hours"},
+    {"code": "SL", "definition": "Sick Leave", "description": "Medical leave", "hours": 12, "isDirectCare": false, "remarks": "Contributes to duty hours"},
+    {"code": "PH", "definition": "Public Holiday", "description": "Public Holiday Off", "hours": 12, "isDirectCare": false, "remarks": "Contributes to duty hours"},
+    {"code": "CL", "definition": "Compensatory Leave", "description": "Time-off in lieu", "hours": 12, "isDirectCare": false, "remarks": "Contributes to duty hours"},
+    {"code": "TR", "definition": "Training", "description": "Training/Development", "hours": 8, "isDirectCare": false, "remarks": "Training day (8h)"},
+    {"code": "AD", "definition": "Admin", "description": "Administrative Duties", "hours": 8, "isDirectCare": false, "remarks": "Non-clinical day (8h)"}
   ]'::jsonb
 )
 ON CONFLICT (id) DO UPDATE SET
@@ -35,7 +35,7 @@ ON CONFLICT (id) DO UPDATE SET
   updated_at = NOW();
 
 -- Sample Rota Config: February 2026
-INSERT INTO rotas_config (id, unit_id, unit_name, start_date, end_date, staff_owing_hours, staff_target_hours, special_requests, comments)
+INSERT INTO rotas_config (id, unit_id, unit_name, start_date, end_date, staff_owing_hours, staff_target_hours, special_requests, rules, comments)
 VALUES (
   '22222222-2222-2222-2222-222222222222',
   '11111111-1111-1111-1111-111111111111',
@@ -47,8 +47,12 @@ VALUES (
   '[
     {"staffId": "s1", "date": "2026-02-14", "shiftCode": "AL", "isLocked": true},
     {"staffId": "s1", "date": "2026-02-15", "shiftCode": "AL", "isLocked": true},
-    {"staffId": "s3", "date": "2026-02-10", "shiftCode": "DO", "isLocked": true},
+    {"staffId": "s3", "date": "2026-02-10", "shiftCode": "O", "isLocked": true},
     {"staffId": "s2", "date": "2026-02-20", "shiftCode": "TR", "isLocked": true}
+  ]'::jsonb,
+  '[
+    {"rule": "min_rest_between_duties", "value": "12", "locked": true},
+    {"rule": "min_weekends_off", "value": "1", "locked": true}
   ]'::jsonb,
   'February 2026 schedule. Note: Fatima on leave 14-15th for family event.'
 )
@@ -56,6 +60,7 @@ ON CONFLICT (id) DO UPDATE SET
   staff_owing_hours = EXCLUDED.staff_owing_hours,
   staff_target_hours = EXCLUDED.staff_target_hours,
   special_requests = EXCLUDED.special_requests,
+  rules = EXCLUDED.rules,
   updated_at = NOW();
 
 -- Verification query

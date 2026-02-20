@@ -1,116 +1,208 @@
-generate_input_task:
+analyze_requirements_task:
   description: >
-    Transform the Supabase data into Timefold input_data.json format.
-    
-    INPUT DATA:
-    - Rota Config: {rota_data}
-    - Unit Config: {unit_data}
-    
-    EXTRACT FROM ABOVE:
-    - staff list from unit_data
-    - shift_codes from unit_data  
-    - special_requests from rota_data
-    - staff_target_hours and staff_owing_hours from rota_data
-    - start_date and end_date from rota_data
-    - comments from rota_data
-    
-    OUTPUT SCHEMA:
+    ANALYZE the raw rota and unit data for rota {rota_id}.
+    The raw data is provided below (fetched from Supabase via @before_kickoff).
+
+    The raw data contains:
+    - Unit: name, manager, rules (free text), staff (JSON array), shift_codes (JSON array)
+    - Rota Config: start_date, end_date, staff_owing_hours, staff_target_hours,
+      special_requests (locked shifts), rules (saved rules), comments (free text)
+
+    YOUR OUTPUT must be a single JSON object with this structure:
+
     {{
-      "problemId": "rota-{rota_id}",
-      "config": {{
-        "unitName": "from unit_data.name",
-        "startDate": "YYYY-MM-DD",
-        "endDate": "YYYY-MM-DD",
-        "minNursesPerShift": 2
+      "context": {{
+        "unit_id": "...",
+        "unit_name": "...",
+        "period": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}},
+        "total_days": 28,
+        "shift_definitions": [
+          {{"code": "D", "definition": "Day", "hours": 12, "isDirectCare": true}},
+          ...
+        ]
       }},
-      "employees": [
+
+      "staff_profiles": [
         {{
-          "id": "staff.id (e.g. s1)",
-          "name": "staff.name",
-          "skills": ["staff.position"],
+          "staff_id": "s1",
+          "name": "Fatima Hassan",
+          "staffId": "N001",
+          "position": "Senior Nurse",
+          "isDirectCare": true,
           "contractedHours": 160,
-          "owingHours": "from staff_owing_hours[id]",
-          "paidAbsenceHours": "calculate from AL/SL/TR in special_requests",
-          "targetWorkingHours": "from staff_target_hours[id] OR calculate",
-          "unavailableTimeSpans": [
-            "dates where this staff has AL/SL/TR/DO in special_requests"
+          "owingHours": -12,
+          "targetHours": 148,
+          "comments": "original staff comments",
+          "inferred_constraints": [
+            {{"type": "experience_level", "detail": "Senior, can mentor", "strength": "info", "source": "comments"}}
           ]
         }}
       ],
-      "shifts": [
-        {{
-          "id": "2026-02-01-M",
-          "code": "M",
-          "start": "2026-02-01T07:00:00",
-          "end": "2026-02-01T15:00:00",
-          "hours": 8,
-          "lockedEmployeeId": "staff.id if isLocked=true for working shift"
-        }}
-      ],
-      "constraintConfig": {{
-        "hard": [
-          {{"name": "one_shift_per_day"}},
-          {{"name": "honor_unavailability"}},
-          {{"name": "honor_locked_assignments"}}
-        ],
-        "soft": [
-          {{"name": "balance_hours", "weight": 100}}
-        ]
-      }}
-    }}
-    
-    CRITICAL RULES:
-    1. Use shift_codes from unit_data to get actual shift times
-    2. Generate shifts only for WORKING types (M/E/N) - not for AL/SL/TR/DO
-    3. For locked working shifts (M/E/N with isLocked=true), set lockedEmployeeId
-    4. For non-working codes (AL/SL/TR/DO), add to unavailableTimeSpans only
-    5. Read the comments field for any special instructions
-    
-    OUTPUT ONLY VALID JSON - no markdown code blocks
-  expected_output: >
-    Valid JSON matching the Timefold input schema.
-  agent: data_interpreter
 
-run_and_validate_task:
+      "hard_constraints": [
+        {{"rule_id": "locked_assignments", "description": "All special requests must be honored exactly"}},
+        {{"rule_id": "one_shift_per_day", "description": "Each staff gets exactly one shift code per day"}},
+        {{"rule_id": "min_rest_between_duties", "minimum_hours": 12, "source": "rota_rules"}},
+        {{"rule_id": "max_consecutive_work_days", "maximum": 5, "source": "unit_rules"}}
+      ],
+
+      "soft_constraints": [
+        {{"rule_id": "balance_hours", "description": "Total assigned hours should be close to targetHours for each staff"}},
+        {{"rule_id": "fair_night_distribution", "description": "Night shifts distributed roughly evenly"}},
+        {{"rule_id": "honor_preferences", "description": "Respect shift preferences from comments"}}
+      ],
+
+      "fixed_assignments": [
+        {{"staff_id": "s1", "date": "2026-02-14", "shift_code": "AL", "locked": true}},
+        ...
+      ],
+
+      "coverage_expectations": [
+        {{"type": "minimum_per_shift", "shift_code": "D", "minimum": 1, "source": "best_practice"}},
+        {{"type": "minimum_per_shift", "shift_code": "N", "minimum": 1, "source": "best_practice"}}
+      ],
+
+      "derived_notes": [
+        "Any observations about skill mix, training needs, etc."
+      ],
+
+      "assumptions": [
+        "Any ambiguities or things not explicitly stated"
+      ]
+    }}
+
+    CRITICAL:
+    - Use the ACTUAL data from the database, not example/placeholder data
+    - Calculate targetHours = contractedHours + owingHours for each staff
+    - Extract fixed_assignments from special_requests in rota config
+    - Extract rules from BOTH unit rules (free text) AND rota saved_rules (JSON)
+    - Read comments carefully for implicit constraints
+    - Output ONLY valid JSON — no explanatory text before or after
+
+    RAW DATA:
+    {raw_data}
+  expected_output: >
+    A single valid JSON object containing the complete structured requirements model
+    with context, staff_profiles, hard_constraints, soft_constraints, fixed_assignments,
+    coverage_expectations, derived_notes, and assumptions.
+  agent: data_analyzer
+
+generate_schedule_task:
   description: >
-    Run the Timefold solver on the input_data.json, then validate and format the output.
-    
-    STEP 1: RUN SOLVER
-    Use the TimefoldSolverTool with file_path = "{input_file_path}"
-    
-    STEP 2: VALIDATE LOCKED REQUESTS
-    Compare solver output against special_requests from input:
-    - Special Requests: {special_requests}
-    For each request with isLocked=true:
-    - If shiftCode is M/E/N: verify that employee is assigned that shift on that date
-    - If shiftCode is AL/SL/TR/DO: verify employee is NOT assigned a working shift
-    
-    STEP 3: ADD NON-CLINICAL CODES
-    The solver only assigns M/E/N shifts. For each special_request with AL/SL/TR/DO:
-    - Add to schedule: {{date, employeeId, employeeName, shiftCode}}
-    - Use staffId to look up employeeName from the staff list in {unit_data}
-    
-    STEP 4: FILL REMAINING DAYS WITH OFF CODE
-    For each employee, for each date in the period:
-    - If no shift assigned and no special_request, assign "O" (day off)
-    
-    STEP 5: FORMAT FINAL OUTPUT
+    You receive a structured requirements model from the Data Analyzer.
+
+    Using your reasoning capabilities, generate a COMPLETE schedule.
+
+    STEP 1 — UNDERSTAND REQUIREMENTS:
+    - Read the requirements JSON carefully
+    - Note all fixed assignments (locked shifts)
+    - Note each staff member's target hours
+    - Note all hard and soft constraints
+
+    STEP 2 — PLAN:
+    Think through the scheduling period:
+    - How many D and N shifts does each person need to hit their target hours?
+    - Which days are already locked?
+    - How to distribute nights fairly?
+
+    STEP 3 — BUILD SCHEDULE:
+    For each day in the period, assign one shift code to each staff member:
+    - If there's a fixed assignment → use that code
+    - Otherwise → assign D, N, or O based on:
+      * Coverage needs (at least 1 on D, at least 1 on N)
+      * Hours balancing toward target
+      * Rest requirements (12h between shifts)
+      * Fair distribution of nights and weekends
+
+    STEP 4 — SELF-CHECK:
+    Before outputting, verify:
+    - Every staff has exactly 1 entry per day
+    - All locked assignments are present
+    - No back-to-back N→D transitions (rest violation)
+    - Total hours per staff are within reasonable range of target
+
+    OUTPUT FORMAT (strict JSON):
+    {{
+      "schedule": [
+        {{"date": "2026-02-01", "employeeId": "s1", "employeeName": "Fatima Hassan", "shiftCode": "D"}},
+        {{"date": "2026-02-01", "employeeId": "s2", "employeeName": "Ahmed Ali", "shiftCode": "N"}},
+        ...
+      ],
+      "hours_summary": {{
+        "s1": {{"name": "Fatima Hassan", "assigned": 148, "target": 148, "balance": 0}},
+        ...
+      }},
+      "notes": "Brief explanation of key scheduling decisions"
+    }}
+
+    Output ONLY valid JSON. No text before or after.
+  expected_output: >
+    A complete schedule JSON with every staff member having exactly one entry
+    per day for the entire scheduling period, plus an hours summary showing
+    assigned vs target hours.
+  agent: schedule_generator
+
+validate_schedule_task:
+  description: >
+    You receive TWO inputs from previous agents:
+    1. The REQUIREMENTS MODEL from Agent 1
+    2. The GENERATED SCHEDULE from Agent 2
+
+    Also read the raw data file at generated/raw_rota_data.json for original source truth.
+
+    PERFORM SYSTEMATIC VALIDATION:
+
+    CHECK 1 — COMPLETENESS:
+    - Count entries: should be (number_of_staff × number_of_days)
+    - Every staff must have exactly 1 entry per day
+    - No missing days, no duplicates
+
+    CHECK 2 — FIXED ASSIGNMENTS:
+    - Compare every fixed_assignment from requirements against the schedule
+    - Each locked shift must appear EXACTLY as specified
+    - If any are missing or changed, FIX them
+
+    CHECK 3 — REST CONSTRAINTS:
+    - For each staff member, check consecutive day pairs
+    - N shift followed by D shift next day = REST VIOLATION
+    - If found, fix by changing the D to O or N
+
+    CHECK 4 — COVERAGE:
+    - For each day, count how many staff are on D and how many on N
+    - Flag any day with 0 coverage on either shift type
+
+    CHECK 5 — HOURS BALANCE:
+    - For each staff, sum up their shift hours using shift_definitions
+    - Compare to their targetHours
+    - Note significant deviations (>12h over/under target)
+
+    CHECK 6 — CONSECUTIVE LIMITS:
+    - Check for excessive consecutive work days (>5) or consecutive nights (>3)
+
+    After validation, output the final schedule in this EXACT JSON format:
     {{
       "status": "success",
-      "score": "from solver result",
       "schedule": [
-        {{"date": "YYYY-MM-DD", "employeeId": "s1", "employeeName": "Name", "shiftCode": "M|E|N|O|AL|SL|TR|DO"}}
+        {{"date": "YYYY-MM-DD", "employeeId": "s1", "employeeName": "Name", "shiftCode": "D"}},
+        ...
       ],
       "summary": {{
-        "totalShifts": "total entries in schedule",
-        "assignedShifts": "working shifts (M/E/N)",
+        "totalShifts": <count>,
+        "assignedShifts": <count>,
         "unassignedShifts": 0,
-        "employeeHours": {{"Name": hours}},
-        "validationIssues": ["list any problems found"]
-      }}
+        "employeeHours": {{
+          "Employee Name": {{"total": 148.0, "target": 148.0, "balance": 0.0}},
+          ...
+        }}
+      }},
+      "validation_notes": ["Check 1: PASSED - all entries present", ...]
     }}
-    
-    OUTPUT ONLY VALID JSON - no markdown code blocks
+
+    If you fixed any issues, set status to "success" and note what was fixed
+    in validation_notes.
+
+    Output ONLY valid JSON. No text before or after.
   expected_output: >
-    A valid JSON object with the finalized schedule ready for the frontend.
-  agent: validator
+    A valid JSON object with status, the complete schedule in the exact format
+    needed for database storage, a summary with hours breakdown, and validation notes.
+  agent: final_validator

@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
-import type { RotaState, RotaListItem, SpecialRequest, StaffOwingHours } from '../types';
+import type { RotaState, RotaListItem, SavedRule, SpecialRequest, StaffOwingHours } from '../types';
 
 // Database row type (snake_case) - matches rotas_config table
 type RotaRow = {
@@ -11,6 +11,7 @@ type RotaRow = {
     staff_owing_hours: StaffOwingHours | null;
     staff_target_hours: StaffOwingHours | null;
     special_requests: SpecialRequest[];
+    rules: SavedRule[] | null;
     comments: string | null;
     created_at: string;
     updated_at: string;
@@ -28,6 +29,8 @@ const rowToRotaState = (row: RotaRow): RotaState => ({
     staffOwingHours: row.staff_owing_hours || {},
     staffTargetHours: row.staff_target_hours || {},
     specialRequests: row.special_requests || [],
+    rules: [],  // Rehydrated in CreateRota from savedRules + defaults
+    savedRules: row.rules || [],
     comments: row.comments || '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -42,6 +45,10 @@ const rotaStateToPayload = (state: RotaState) => ({
     staff_owing_hours: state.staffOwingHours,
     staff_target_hours: state.staffTargetHours,
     special_requests: state.specialRequests,
+    // Only persist active rules in minimized, self-describing format
+    rules: state.rules
+        .filter(r => r.isActive)
+        .map(r => ({ rule: r.key, value: r.currentValue, locked: r.isLocked })),
     comments: state.comments || null,
     updated_at: new Date().toISOString(),
 });

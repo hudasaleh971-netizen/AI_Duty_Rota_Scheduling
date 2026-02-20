@@ -1,9 +1,50 @@
+import { supabase } from '../lib/supabaseClient';
 import type { ScheduleResult } from '../types';
 
 // Backend API URL
 const API_BASE_URL = 'http://localhost:5000';
 
 export const scheduleService = {
+    /**
+     * Get existing schedule from Supabase
+     */
+    async getScheduleByRotaId(rotaId: string): Promise<ScheduleResult | null> {
+        try {
+            const { data, error } = await supabase
+                .from('schedule_assignments')
+                .select('*')
+                .eq('rota_id', rotaId);
+
+            if (error) throw error;
+
+            if (!data || data.length === 0) {
+                return null;
+            }
+
+            // Transform DB rows back to ScheduleResult format
+            const schedule = data.map((row: any) => ({
+                date: row.date,
+                employeeId: row.employee_id,
+                employeeName: row.employee_name,
+                shiftCode: row.shift_code
+            }));
+
+            // Note: DB doesn't store summary stats yet unless we added a column for it.
+            // For now, we can either re-calculate on frontend or just return schedule.
+            // The user wanted "pending/owning hours". Ideally we store the summary blob in rotas_config
+            // or we re-calculate here. Re-calculating on frontend is safer for now.
+            return {
+                status: 'success',
+                schedule,
+                summary: undefined // Frontend can compute or we fetch from rotas_config if we saved it there
+            };
+
+        } catch (error) {
+            console.error('Error fetching schedule:', error);
+            return null;
+        }
+    },
+
     /**
      * Generate an optimized schedule for the given rota.
      * Calls the 3-agent CrewAI pipeline.

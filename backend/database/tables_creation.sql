@@ -2,9 +2,8 @@
 CREATE TABLE units (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
-  department TEXT,
+  name TEXT NOT NULL,
   manager TEXT,
-  min_nurses_per_shift INTEGER DEFAULT 2,
   rules TEXT,
   staff JSONB DEFAULT '[]'::jsonb,
   shift_codes JSONB DEFAULT '[]'::jsonb,
@@ -27,7 +26,28 @@ CREATE TABLE rotas_config (
   staff_target_hours JSONB DEFAULT '{}'::jsonb,  -- <--- NEW COLUMN
   
   special_requests JSONB DEFAULT '[]'::jsonb,
+  
+  -- Active scheduling rules with user-configured values (e.g. [{"id":"R1","value":"12","locked":true}])
+  rules JSONB DEFAULT '[]'::jsonb,
+  
   comments TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Schedule Assignments table (NEW)
+CREATE TABLE schedule_assignments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  rota_id UUID REFERENCES rotas_config(id) ON DELETE CASCADE,
+  date DATE NOT NULL,
+  employee_id TEXT NOT NULL,
+  shift_code TEXT NOT NULL,
+  
+  -- Optional: Store cached employee data to avoid joins if staff JSON changes
+  employee_name TEXT,
+  
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  
+  -- Ensure unique assignment per person per day
+  UNIQUE(rota_id, date, employee_id)
 );

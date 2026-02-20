@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button';
 import { scheduleService } from '../services/scheduleService';
 import { rotaService } from '../services/rotaService';
 import { unitService } from '../services/unitService';
-import type { ScheduleResult, RotaState, UnitState } from '../types';
+import type { ScheduleResult, RotaState, UnitState, ScheduleSummary } from '../types';
 
 const ViewSchedule = () => {
     const { rotaId } = useParams<{ rotaId: string }>();
@@ -40,6 +40,59 @@ const ViewSchedule = () => {
         return scheduleService.parseScheduleByStaff(scheduleResult);
     }, [scheduleResult]);
 
+    // Compute summary client-side so it persists across page visits
+    // Uses schedule assignments + unit shift code hours definitions
+    const computedSummary: ScheduleSummary | undefined = useMemo(() => {
+        // If the API already gave us a summary, use it
+        if (scheduleResult?.summary?.employeeHours && Object.keys(scheduleResult.summary.employeeHours).length > 0) {
+            return scheduleResult.summary;
+        }
+        // Otherwise, compute from raw schedule + unit shift codes
+        if (!scheduleResult?.schedule || !unit) return undefined;
+
+        // Build a code -> hours map from unit shift codes
+        const codeHoursMap: Record<string, number> = {};
+        for (const sc of unit.shiftCodes) {
+            codeHoursMap[sc.code.toUpperCase()] = sc.hours;
+        }
+
+        // Build per-employee hours and get target from rota
+        const employeeHours: Record<string, { total: number; target: number; balance: number }> = {};
+        let totalShifts = 0;
+        let assignedShifts = 0;
+
+        for (const entry of scheduleResult.schedule) {
+            const name = entry.employeeName || entry.employeeId || 'Unknown';
+            const code = (entry.shiftCode || '').toUpperCase();
+            const hours = codeHoursMap[code] ?? 0;
+
+            if (!employeeHours[name]) {
+                // Try to find target from rota staffTargetHours
+                const staffMember = unit.staff.find(s => s.name === name);
+                const targetHours = staffMember && rota?.staffTargetHours
+                    ? (rota.staffTargetHours[staffMember.id] ?? staffMember.contractedHours)
+                    : 0;
+                employeeHours[name] = { total: 0, target: targetHours, balance: 0 };
+            }
+
+            employeeHours[name].total += hours;
+
+            if (code === 'D' || code === 'N' || code === 'M' || code === 'E') {
+                totalShifts++;
+            }
+            if (code !== 'O' && code !== 'DO' && code !== '-') {
+                assignedShifts++;
+            }
+        }
+
+        // Calculate balance
+        for (const name of Object.keys(employeeHours)) {
+            employeeHours[name].balance = employeeHours[name].total - employeeHours[name].target;
+        }
+
+        return { totalShifts, assignedShifts, unassignedShifts: 0, employeeHours };
+    }, [scheduleResult, unit, rota]);
+
     // Load rota and unit data
     useEffect(() => {
         const loadData = async () => {
@@ -62,6 +115,14 @@ const ViewSchedule = () => {
                 if (unitData) {
                     setUnit(unitData);
                 }
+
+                // Load existing schedule if available
+                const savedSchedule = await scheduleService.getScheduleByRotaId(rotaId);
+                if (savedSchedule) {
+                    console.log('Loaded persisted schedule:', savedSchedule);
+                    setScheduleResult(savedSchedule);
+                }
+
             } catch (err) {
                 console.error('Failed to load data:', err);
                 setError(err instanceof Error ? err.message : 'Failed to load data');
@@ -92,6 +153,20 @@ const ViewSchedule = () => {
         } finally {
             setGenerating(false);
         }
+    };
+
+    // Helper to get hours value (handles number vs object)
+    const getHoursValue = (val: number | { total: number } | undefined): number => {
+        if (val === undefined) return 0;
+        if (typeof val === 'number') return val;
+        return val.total;
+    };
+
+    // Helper to get hours detail (handles number vs object)
+    const getHoursDetail = (val: number | { total: number, target?: number, balance?: number } | undefined) => {
+        if (val === undefined) return { total: 0 };
+        if (typeof val === 'number') return { total: val };
+        return val;
     };
 
     // Format date for display
@@ -170,13 +245,6 @@ const ViewSchedule = () => {
                         <Button variant="secondary" onClick={() => navigate('/')}>
                             ← Dashboard
                         </Button>
-                        <Button
-                            variant="primary"
-                            onClick={handleGenerate}
-                            disabled={generating}
-                        >
-                            {generating ? '🤖 Generating...' : '🔄 Generate Schedule'}
-                        </Button>
                     </div>
                 </div>
             </header>
@@ -208,21 +276,21 @@ const ViewSchedule = () => {
                                         </p>
                                     )}
                                 </div>
-                                {scheduleResult.summary && (
+                                {computedSummary && (
                                     <div className="flex gap-4">
                                         <div style={{ textAlign: 'center' }}>
-                                            <div className="text-large font-bold">{scheduleResult.summary.totalShifts}</div>
+                                            <div className="text-large font-bold">{computedSummary.totalShifts}</div>
                                             <div className="text-small text-muted">Total Shifts</div>
                                         </div>
                                         <div style={{ textAlign: 'center' }}>
                                             <div className="text-large font-bold" style={{ color: 'var(--color-teal-500)' }}>
-                                                {scheduleResult.summary.assignedShifts}
+                                                {computedSummary.assignedShifts}
                                             </div>
                                             <div className="text-small text-muted">Assigned</div>
                                         </div>
                                         <div style={{ textAlign: 'center' }}>
                                             <div className="text-large font-bold" style={{ color: 'var(--color-coral-500)' }}>
-                                                {scheduleResult.summary.unassignedShifts}
+                                                {computedSummary.unassignedShifts}
                                             </div>
                                             <div className="text-small text-muted">Unassigned</div>
                                         </div>
@@ -249,6 +317,9 @@ const ViewSchedule = () => {
                         <Button variant="primary" size="lg" onClick={handleGenerate}>
                             🚀 Generate Optimized Schedule
                         </Button>
+                        <p className="text-small text-muted" style={{ marginTop: '1rem' }}>
+                            ⏱️ This process may take a few minutes as the AI analyzes constraints and finds the best assignments.
+                        </p>
                     </div>
                 )}
 
@@ -258,7 +329,7 @@ const ViewSchedule = () => {
                         <div style={{ fontSize: '4rem', marginBottom: '1rem', animation: 'pulse 2s infinite' }}>🤖</div>
                         <h2>AI is Optimizing Your Schedule...</h2>
                         <p className="text-muted">
-                            This may take up to 2 minutes. The AI is analyzing constraints and finding the best assignments.
+                            This will take some time. The AI is reasoning through constraints, validating assignments, and finding the best schedule.
                         </p>
                         <div className="mt-4" style={{ width: '200px', margin: '1rem auto', height: '4px', background: 'var(--color-slate-200)', borderRadius: '2px', overflow: 'hidden' }}>
                             <div style={{ width: '100%', height: '100%', background: 'var(--color-teal-500)', animation: 'loading 1.5s ease-in-out infinite' }} />
@@ -299,7 +370,9 @@ const ViewSchedule = () => {
                                     </thead>
                                     <tbody>
                                         {unit.staff.map((staff) => {
-                                            const hours = scheduleResult.summary?.employeeHours?.[staff.name] || 0;
+                                            const hoursData = computedSummary?.employeeHours?.[staff.name];
+                                            const totalHours = getHoursValue(hoursData);
+
                                             return (
                                                 <tr key={staff.id}>
                                                     <td>
@@ -313,13 +386,13 @@ const ViewSchedule = () => {
                                                             style={{
                                                                 textAlign: 'center',
                                                                 fontWeight: 600,
-                                                                color: hours > 0 ? 'var(--color-teal-600)' : 'var(--color-slate-400)',
-                                                                background: hours > 0 ? 'var(--color-teal-50)' : 'transparent',
+                                                                color: totalHours > 0 ? 'var(--color-teal-600)' : 'var(--color-slate-400)',
+                                                                background: totalHours > 0 ? 'var(--color-teal-50)' : 'transparent',
                                                                 padding: '0.5rem',
                                                                 borderRadius: 'var(--radius-md)',
                                                             }}
                                                         >
-                                                            {hours}h
+                                                            {totalHours}h
                                                         </div>
                                                     </td>
                                                     {dateRange.map((date) => {
@@ -353,7 +426,7 @@ const ViewSchedule = () => {
                 )}
 
                 {/* Employee Hours Summary */}
-                {scheduleResult?.status === 'success' && scheduleResult.summary?.employeeHours && (
+                {scheduleResult?.status === 'success' && computedSummary?.employeeHours && (
                     <div className="card animate-fadeIn stagger-1 mb-6">
                         <div className="card-header">
                             <h3 className="card-title">📈 Hours Summary</h3>
@@ -362,34 +435,57 @@ const ViewSchedule = () => {
                             <div
                                 style={{
                                     display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                                    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
                                     gap: '1rem',
                                 }}
                             >
-                                {Object.entries(scheduleResult.summary.employeeHours).map(([name, hours]) => (
-                                    <div
-                                        key={name}
-                                        style={{
-                                            padding: '1rem',
-                                            background: 'var(--color-slate-50)',
-                                            borderRadius: 'var(--radius-lg)',
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                        }}
-                                    >
-                                        <span style={{ fontWeight: 500 }}>{name}</span>
-                                        <span
+                                {Object.entries(computedSummary.employeeHours).map(([name, hoursData]) => {
+                                    const { total, target, balance } = getHoursDetail(hoursData);
+
+                                    return (
+                                        <div
+                                            key={name}
                                             style={{
-                                                fontWeight: 700,
-                                                color: hours > 0 ? 'var(--color-teal-600)' : 'var(--color-slate-400)',
-                                                fontSize: '1.125rem',
+                                                padding: '1rem',
+                                                background: 'var(--color-slate-50)',
+                                                borderRadius: 'var(--radius-lg)',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '0.5rem'
                                             }}
                                         >
-                                            {hours}h
-                                        </span>
-                                    </div>
-                                ))}
+                                            <div className="flex justify-between items-center">
+                                                <span style={{ fontWeight: 600 }}>{name}</span>
+                                                <span
+                                                    style={{
+                                                        fontWeight: 700,
+                                                        color: total > 0 ? 'var(--color-teal-600)' : 'var(--color-slate-400)',
+                                                        fontSize: '1.25rem',
+                                                    }}
+                                                >
+                                                    {total}h
+                                                </span>
+                                            </div>
+
+                                            {/* Target & Balance stats if available */}
+                                            {(target !== undefined || balance !== undefined) && (
+                                                <div className="flex justify-between text-small" style={{ borderTop: '1px solid var(--color-slate-200)', paddingTop: '0.5rem' }}>
+                                                    {target !== undefined && (
+                                                        <span className="text-muted">Target: {target}h</span>
+                                                    )}
+                                                    {balance !== undefined && (
+                                                        <span style={{
+                                                            fontWeight: 600,
+                                                            color: balance > 0 ? 'var(--color-coral-500)' : (balance < 0 ? 'var(--color-teal-500)' : 'var(--color-slate-500)')
+                                                        }}>
+                                                            {balance > 0 ? `+${balance}h Over` : (balance < 0 ? `${balance}h Under` : 'On Target')}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
                             </div>
                         </div>
                     </div>

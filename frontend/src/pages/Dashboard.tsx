@@ -200,13 +200,7 @@ const Dashboard = () => {
                                     >
                                         📊 View Schedule
                                     </Button>
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() => navigate(`/edit-rota/${rota.id}`)}
-                                    >
-                                        ✏️ Edit
-                                    </Button>
+
                                 </div>
                             </div>
                         ))}
