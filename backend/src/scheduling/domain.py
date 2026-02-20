@@ -39,7 +39,10 @@ class TimeSpan:
             self.end = datetime.fromisoformat(self.end)
 
     def overlaps(self, other_start: datetime, other_end: datetime) -> bool:
-        return max(self.start, other_start) < min(self.end, other_end)
+        # Interpreter compliant implementation of: max(self.start, other_start) < min(self.end, other_end)
+        start_max = self.start if self.start > other_start else other_start
+        end_min = self.end if self.end < other_end else other_end
+        return start_max < end_min
 
 
 @dataclass
@@ -59,18 +62,41 @@ class Employee:
     mentor_id: Optional[str] = None
 
     def __post_init__(self):
-        # Convert dicts to TimeSpan objects
+        # Convert various formats to TimeSpan objects
+        def to_timespan(ts):
+            if isinstance(ts, TimeSpan):
+                return ts
+            if isinstance(ts, dict):
+                return TimeSpan(**ts)
+            if isinstance(ts, str):
+                # Simple date string like "2026-02-14" -> full day TimeSpan
+                from datetime import timedelta
+                try:
+                    # Try parsing as full datetime first
+                    dt = datetime.fromisoformat(ts)
+                    # If it's just a date (no time component), make it a full day
+                    if 'T' not in ts:
+                        return TimeSpan(start=dt, end=dt + timedelta(days=1))
+                    return TimeSpan(start=dt, end=dt + timedelta(hours=8))  # Default 8-hour span
+                except ValueError:
+                    # If parsing fails, return None (will be filtered out)
+                    return None
+            return None
+        
         self.unavailable_time_spans = [
-            TimeSpan(**ts) if isinstance(ts, dict) else ts 
-            for ts in self.unavailable_time_spans
+            ts for ts in (to_timespan(item) for item in self.unavailable_time_spans)
+            if ts is not None
         ]
         self.preferred_time_spans = [
-            TimeSpan(**ts) if isinstance(ts, dict) else ts 
-            for ts in self.preferred_time_spans
+            ts for ts in (to_timespan(item) for item in self.preferred_time_spans)
+            if ts is not None
         ]
 
     def is_unavailable(self, shift_start: datetime, shift_end: datetime) -> bool:
-        return any(ts.overlaps(shift_start, shift_end) for ts in self.unavailable_time_spans)
+        for ts in self.unavailable_time_spans:
+            if ts.overlaps(shift_start, shift_end):
+                return True
+        return False
 
     def has_preference(self, shift_start: datetime, shift_end: datetime) -> bool:
         return any(ts.overlaps(shift_start, shift_end) for ts in self.preferred_time_spans)

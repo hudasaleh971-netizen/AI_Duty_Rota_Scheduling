@@ -45,13 +45,35 @@ class TimefoldSolverTool(BaseTool):
         """Run the Timefold solver on the input file."""
         try:
             # Validate file exists
-            if not Path(file_path).exists():
+            path = Path(file_path)
+            if not path.exists():
                 return {
                     "status": "error", 
                     "error": f"Input file not found: {file_path}"
                 }
             
+            # Read file and strip markdown code fences if present
+            # LLMs sometimes wrap JSON in ```json ... ``` despite instructions
+            content = path.read_text(encoding='utf-8')
+            original_content = content
+            
+            # Strip markdown code fences
+            if content.strip().startswith('```'):
+                lines = content.strip().split('\n')
+                # Remove first line (```json or ```)
+                if lines[0].strip().startswith('```'):
+                    lines = lines[1:]
+                # Remove last line (```)
+                if lines and lines[-1].strip() == '```':
+                    lines = lines[:-1]
+                content = '\n'.join(lines)
+                
+                # Write cleaned content back to file
+                path.write_text(content, encoding='utf-8')
+                print(f"📝 Cleaned markdown from {path.name}")
+            
             print(f"🔧 Tool: Running Timefold solver on {file_path}...")
+            print(f"📁 Loading: {file_path}")
             result = run_solver(file_path, time_limit=30)
             print(f"✅ Solver complete. Score: {result.get('score', 'N/A')}")
             return result

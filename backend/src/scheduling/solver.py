@@ -11,7 +11,8 @@ from timefold.solver import SolverFactory
 from timefold.solver.config import (
     SolverConfig,
     ScoreDirectorFactoryConfig,
-    TerminationConfig
+    TerminationConfig,
+    Duration
 )
 
 from .domain import Shift, ShiftSchedule
@@ -72,7 +73,7 @@ def solve_from_dict(data: dict, time_limit_seconds: int = 30) -> dict:
             constraint_provider_function=constraint_provider
         ),
         termination_config=TerminationConfig(
-            spent_limit=f"PT{time_limit_seconds}S"
+            spent_limit=Duration(seconds=time_limit_seconds)
         )
     )
     

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { TextArea } from '../components/ui/TextArea';
-import { AICopilotSidebar } from '../components/AICopilotSidebar';
+
 import type { UnitState, Staff, ShiftCode } from '../types';
 import { createEmptyUnitState, createEmptyStaff, createEmptyShiftCode } from '../types';
 import { unitService, defaultShiftCodes } from '../services/unitService';
@@ -421,17 +421,8 @@ const CreateUnit = () => {
                 </div>
             </div>
 
-            {/* AI Copilot Sidebar for unit configuration assistance */}
-            <AICopilotSidebar
-                agentType="unit"
-                onFileProcessed={(data) => {
-                    console.log('Unit file processed:', data);
-                    // TODO: Apply extracted staff/shift data to form
-                }}
-                onSuggestionsReceived={(suggestions) => {
-                    console.log('Unit suggestions:', suggestions);
-                }}
-            />
+
+
         </>
     );
 };

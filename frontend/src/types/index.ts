@@ -1,5 +1,5 @@
 // ============================================================
-// TYPE DEFINITIONS - CopilotKit-Ready State Schemas
+// TYPE DEFINITIONS - Schedule State Schemas
 // ============================================================
 
 // Staff member in a unit

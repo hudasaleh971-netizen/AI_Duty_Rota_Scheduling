@@ -26,21 +26,7 @@ from src.tools.scheduling_tools import TimefoldSolverTool
 
 load_dotenv()
 
-# ==========================================================================
-# LANGFUSE TRACING
-# ==========================================================================
-try:
-    from langfuse import get_client
-    from openinference.instrumentation.crewai import CrewAIInstrumentor
-    
-    langfuse = get_client()
-    if langfuse.auth_check():
-        print("✅ Langfuse tracing enabled")
-        CrewAIInstrumentor().instrument(skip_dep_check=True)
-    else:
-        print("⚠️ Langfuse auth failed - tracing disabled")
-except ImportError:
-    print("⚠️ Langfuse not installed")
+
 
 # ==========================================================================
 # PATHS

@@ -42,11 +42,7 @@ const Layout = () => {
                     </NavLink>
                 </nav>
 
-                <div style={{ padding: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-slate-400)' }}>
-                        Powered by CopilotKit
-                    </div>
-                </div>
+
             </aside>
 
             {/* Main Content */}

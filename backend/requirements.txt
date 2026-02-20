@@ -14,12 +14,3 @@ pydantic>=2.5.0
 
 # Timefold solver
 timefold>=1.0.0
-
-# Langfuse tracing
-langfuse>=2.0.0
-openinference-instrumentation-crewai>=0.1.0
-
-# File processing (optional - for future file upload features)
-openpyxl>=3.1.0
-python-docx>=1.1.0
-python-multipart>=0.0.9

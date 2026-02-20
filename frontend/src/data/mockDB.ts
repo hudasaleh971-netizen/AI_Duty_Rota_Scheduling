@@ -89,6 +89,8 @@ export const mockRotas: RotaState[] = [
             startDate: '2026-02-01',
             endDate: '2026-02-28',
         },
+        staffOwingHours: {},
+        staffTargetHours: {},
         specialRequests: [
             { staffId: 'staff-002', date: '2026-02-14', shiftCode: 'AL', isLocked: true },
             { staffId: 'staff-003', date: '2026-02-10', shiftCode: 'TR', isLocked: false },
@@ -105,6 +107,8 @@ export const mockRotas: RotaState[] = [
             startDate: '2026-02-01',
             endDate: '2026-02-28',
         },
+        staffOwingHours: {},
+        staffTargetHours: {},
         specialRequests: [],
         comments: 'Standard February rotation.',
         createdAt: '2026-01-25T11:00:00Z',
